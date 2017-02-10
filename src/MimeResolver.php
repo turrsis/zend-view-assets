@@ -17,6 +17,10 @@ class MimeResolver implements ResolverInterface
 {
     protected $defaultMimeType = 'text/plain';
 
+    protected $mimeExtensions = [
+        'text/css' => 'css',
+    ];
+
     protected $mimeTypes = [
         'css'      => 'text/css',
         'less'     => 'text/css',
@@ -58,9 +62,29 @@ class MimeResolver implements ResolverInterface
         return $this->defaultMimeType;
     }
 
+    public function resolveExtension($mimeType)
+    {
+        if (isset($this->mimeExtensions[$mimeType])) {
+            return $this->mimeExtensions[$mimeType];
+        }
+        return;
+    }
+
+    public function resolveWebExtension($name)
+    {
+        $mimeType = $this->resolve($name);
+        return $this->resolveExtension($mimeType);
+    }
+
     public function setMimeType($extension, $type)
     {
         $this->mimeTypes[$extension] = $type;
+        return $this;
+    }
+
+    public function setMimeExtension($type, $extension)
+    {
+        $this->mimeExtensions[$type] = $extension;
         return $this;
     }
 }

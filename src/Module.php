@@ -9,7 +9,7 @@ namespace Zend\View\Assets;
 
 use Zend\Loader\AutoloaderFactory;
 use Zend\Loader\StandardAutoloader;
-use Zend\Mvc\MvcEvent;
+use Zend\Stdlib\ArrayUtils;
 
 class Module
 {
@@ -27,16 +27,16 @@ class Module
     public function getConfig()
     {
         $provider = new ConfigProvider();
+        $mvcProvider = new Mvc\ConfigProvider();
         return [
-            'service_manager' => $provider->getDependencyConfig(),
+            'service_manager' => ArrayUtils::merge(
+                $provider->getDependencyConfig(),
+                $mvcProvider->getDependencyConfig()
+            ),
             'view_helpers'    => $provider->getViewHelperConfig(),
+            'assets_manager'  => $provider->getAssetsManagerConfig(),
+            'filters'         => $provider->getFiltersConfig(),
+            'listeners'       => $mvcProvider->getListenersConfig(),
         ];
-    }
-
-    public function onBootstrap(MvcEvent $event)
-    {
-        $assetsListener = $event->getApplication()->getServiceManager()->get('AssetsListener');
-        $assetsListener->attach($event->getApplication()->getEventManager());
-        $assetsListener->injectRouter($event);
     }
 }

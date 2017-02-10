@@ -10,9 +10,12 @@
 namespace ZendTest\View\Assets;
 
 use Zend\View\Assets\AssetsManager;
-use Zend\View\Assets\Asset\Asset;
-use Zend\View\Assets\Asset\Alias;
-use Zend\View\Exception;
+use Zend\Http\PhpEnvironment\Request;
+use Zend\View\Assets\AssetsCollection;
+use Zend\View\Assets\Exception;
+use Zend\Stdlib\ArrayUtils;
+use Zend\ServiceManager\ServiceManager;
+use Zend\View\Assets\Cache;
 
 /**
  * @group      Zend_View
@@ -24,213 +27,318 @@ class AssetsManagerTest extends \PHPUnit_Framework_TestCase
      */
     protected $assetsManager;
 
-    public function setUp()
+    /**
+     * @param array $config
+     * @return AssetsManager
+     */
+    protected function getAssetsManager($config = [])
     {
-        $this->assetsManager = new AssetsManager();
-    }
-
-    public function testSetGetHas()
-    {
-        $this->assetsManager
-                ->set('/string-asset.css', '/string.less')
-                ->set('/string-asset.css', '/string.less')
-                ->set('/array-asset.css', [
-                    'source' => '/foo.less',
-                    'attributes' => [],
-                ])
-                ->set('/array-asset-no-source.css', [
-                    'attributes' => [],
-                ])
-                ->set('pre::/prefix-string-assets.css', [
-                    'assets' => '/css/bar.less',
-                    'attributes' => [],
-                ])
-                ->set('array-assets', [
-                    'assets' => [
-                        '/string-asset.css',
-                        'pre::/prefix-string-assets.css',
-                        'array-asset.css' => [
-                            'source' => 'baz.less',
-                            'attributes' => [],
-                        ],
-                        '/string-source.css',
+        $publicFolder = '_files/assets_cache';
+        $moduleConfig = (new \Zend\View\Assets\Module())->getConfig();
+        $moduleConfig = ArrayUtils::merge(ArrayUtils::merge($moduleConfig, [
+            'assets_manager' => [
+                'public_folder' => $publicFolder,
+                'cache_adapter' => new ArrayUtils\MergeRemoveKey,
+                'template_resolver' => [
+                    'map_resolver' => [
+                        'style1.css' => __DIR__ . '\TestAsset\assets\style1.css',
+                        'style2.css' => __DIR__ . '\TestAsset\assets\style2.css',
                     ],
-                    'attributes' => [],
-                ]);
-
-        $stringAssetCss = $this->assetsManager->get('string-asset.css');
-        $this->assertTrue($this->assetsManager->has('string-asset.css'));
-        $this->assertInstanceOf(Asset::class, $stringAssetCss);
-
-        $arrayAssetCss = $this->assetsManager->get('array-asset.css');
-        $this->assertTrue($this->assetsManager->has('array-asset.css'));
-        $this->assertInstanceOf(Asset::class, $arrayAssetCss);
-        $this->assertEquals('foo.less', $arrayAssetCss->getSource());
-
-        $arrayAssetNoSourceCss = $this->assetsManager->get('array-asset-no-source.css');
-        $this->assertTrue($this->assetsManager->has('array-asset-no-source.css'));
-        $this->assertInstanceOf(Asset::class, $arrayAssetNoSourceCss);
-
-        $prefixStringAssetsCss = $this->assetsManager->get('pre::/prefix-string-assets.css');
-        $this->assertTrue($this->assetsManager->has('pre::/prefix-string-assets.css'));
-        $this->assertInstanceOf(Alias::class, $prefixStringAssetsCss);
-
-        $arrayAssets = $this->assetsManager->get('array-assets');
-        $this->assertTrue($this->assetsManager->has('array-assets'));
-        $this->assertInstanceOf(Alias::class, $arrayAssets);
-
-        $source1 = $arrayAssets->get('string-asset.css');
-        $this->assertTrue($arrayAssets->has('string-asset.css'));
-        $this->assertSame($stringAssetCss, $source1);
-
-        $source2 = $arrayAssets->get('pre::/prefix-string-assets.css');
-        $this->assertTrue($arrayAssets->has('pre::/prefix-string-assets.css'));
-        $this->assertSame($prefixStringAssetsCss, $source2);
-
-        $source3 = $arrayAssets->get('array-asset.css');
-        $this->assertTrue($arrayAssets->has('array-asset.css'));
-        $this->assertInstanceOf(Asset::class, $source3);
-
-        $source4 = $arrayAssets->get('string-source.css');
-        $this->assertTrue($arrayAssets->has('string-source.css'));
-        $this->assertInstanceOf(Asset::class, $source4);
-
-        $this->assertFalse($arrayAssets->has('notExist'));
-        $this->assertFalse($this->assetsManager->has('notExist'));
-    }
-
-    public function testSetInvalidAlias()
-    {
-        $this->setExpectedException(
-            Exception\InvalidArgumentException::class,
-            'Zend\View\Assets\AssetsManager::set: expects "$asset" parameter an Zend\View\Assets\Asset, Zend\View\Assets\Assets, string or array, received "stdClass"'
-        );
-        $this->assetsManager->set('a1', new \stdClass());
-    }
-
-    public function testCurrentGroup()
-    {
-        $this->assertEquals('default', $this->assetsManager->getCurrentGroup());
-
-        $this->assetsManager->setCurrentGroup('group-1')
-                ->set('foo.css', []);
-        $this->assetsManager->setCurrentGroup('group-2')
-                ->set('bar.css', []);
-
-        $this->assetsManager->setCurrentGroup('group-1');
-        $this->assertEquals('group-1', $this->assetsManager->getCurrentGroup());
-        $this->assertTrue($this->assetsManager->has('foo.css'));
-        $this->assertFalse($this->assetsManager->has('bar.css'));
-
-        $this->assetsManager->setCurrentGroup('group-2');
-        $this->assertEquals('group-2', $this->assetsManager->getCurrentGroup());
-        $this->assertFalse($this->assetsManager->has('foo.css'));
-        $this->assertTrue($this->assetsManager->has('bar.css'));
-    }
-
-    public function testSetInvalidCurrentGroup()
-    {
-        $this->setExpectedException(Exception\InvalidArgumentException::class, 'Current group should be not empty string');
-        $this->assetsManager->setCurrentGroup('');
-    }
-
-    public function testFilter()
-    {
-        $this->assetsManager
-                ->set('bothFilter.less', [
-                    'filters' => ['filter3'],
-                ])
-                ->set('systemFilter.less', 'filters.less')
-                ->set('assetFilter.css', [
-                    'filters' => ['filter4'],
-                ])
-                ->set('noFilter.css', 'filters.css');
-        $this->assetsManager->setFilter('\S*.less', 'less_filter');
-
-        $asset = $this->assetsManager->get('bothFilter.less');
-        $this->assertEquals(
-            ['less_filter', 'filter3'],
-            $this->assetsManager->getAssetFilters($asset)
-        );
-        $this->assertTrue($this->assetsManager->hasAssetFilters($asset));
-
-        $asset = $this->assetsManager->get('systemFilter.less');
-        $this->assertEquals(
-            ['less_filter'],
-            $this->assetsManager->getAssetFilters($asset)
-        );
-        $this->assertTrue($this->assetsManager->hasAssetFilters($asset));
-
-        $asset = $this->assetsManager->get('assetFilter.css');
-        $this->assertEquals(
-            ['filter4'],
-            $this->assetsManager->getAssetFilters($asset)
-        );
-        $this->assertTrue($this->assetsManager->hasAssetFilters($asset));
-    }
-
-    public function testPublicFolder()
-    {
-        $this->assetsManager->setPublicFolder('foo');
-        $this->assertEquals('./foo', $this->assetsManager->getPublicFolder());
-    }
-
-    public function testSetInvalidPublicFolder()
-    {
-        $this->setExpectedException(Exception\InvalidArgumentException::class, 'Public folder should be not empty string');
-        $this->assetsManager->setPublicFolder('');
-    }
-
-    public function testPassOptionsViaConstructor()
-    {
-        $this->assetsManager = new AssetsManager([
-            'assets' => [
-                'group' => [
-                    'bat.css' => [],
+                    'prefix_resolver' => [
+                        'foo::' => __DIR__ . '\TestAsset\assets'
+                    ],
+                    'path_resolver' => [],
+                ],
+                'collections' => ['default' => [ 'assets' => [
+                    'style1.css' => [],
+                    'styles-1' => [
+                        'assets' => [
+                            'style2.css' => [],
+                        ],
+                    ],
+                    'styles-3' => [
+                        'assets' => [
+                            'foo::style3.css' => [],
+                        ],
+                    ],
+                    'foo::style4.css' => [],
+                    'aggregate.css' => [
+                        'assets' => [
+                            'style1.css' => [],
+                            'style2.css' => [],
+                        ],
+                        'aggregate' => 'Aggregate',
+                    ],
+                ]]],
+            ],
+            'service_manager' => [
+                'services' => [
+                    'Request' => new Request,
+                ],
+                'factories' => [
+                    'AssetsRouter'  => \Zend\View\Assets\Service\AssetsRouterFactory::class,
+                    'FilterManager' => function ($container, $name) {
+                        $options = $container->get('config');
+                        $filter = new \Zend\Filter\FilterPluginManager(
+                            $container,
+                            isset($options['filters']) ? $options['filters'] : []
+                        );
+                        return $filter;
+                    },
                 ],
             ],
-            'filters' => ['\S*.css' => 'f1'],
-            'public_folder' => 'bar',
-        ]);
+        ]), $config);
+        $moduleConfig['service_manager']['services']['config'] = $moduleConfig;
 
-        $this->assetsManager->setCurrentGroup('group');
-        $asset = $this->assetsManager->get('bat.css');
-
-        $this->assertInstanceOf(Asset::class, $asset);
-        $this->assertEquals(['f1'], $this->assetsManager->getAssetFilters($asset));
-        $this->assertEquals('./bar', $this->assetsManager->getPublicFolder());
+        $serviceManager = new ServiceManager($moduleConfig['service_manager']);
+        return $serviceManager->get('AssetsManager');
     }
 
-    public function testPassAssetsViaConstructor()
+    public function testGetPreparedAsset()
     {
-        $this->assetsManager = new AssetsManager([
-            'assets' => [
-                'default' => [
-                    'foo.css' => [],
-                    'several_assets' => [
-                        'assets' => [
-                            'bar.css',
-                            'bat.js' => [
-                                'attributes' => [
-                                    'charset' => 'UTF-8',
+        $am = $this->getAssetsManager();
+
+        // exists in config
+        $asset = $am->getPreparedAsset(null, null, 'style1.css');
+        $this->assertNull($asset->getTargetContent());
+        $this->assertEquals('.style_1 {}', $asset->getTargetContent(true));
+
+        // exists in config
+        $asset = $am->getPreparedAsset('styles-1', null, 'style2.css');
+        $this->assertNull($asset->getTargetContent());
+        $this->assertEquals('.style_2 {}', $asset->getTargetContent(true));
+
+        // exists in config
+        $asset = $am->getPreparedAsset(null, 'foo', 'style4.css');
+        $this->assertEquals('.style_4 {}', $asset->getTargetContent());
+
+        // exists in config
+        $asset = $am->getPreparedAsset('styles-3', 'foo', 'style3.css');
+        $this->assertEquals('.style_3 {}', $asset->getTargetContent());
+        
+        // not exists in config
+        $asset = $am->getPreparedAsset(null, 'foo', 'style5.css');
+        $this->assertEquals('.style_5 {}', $asset->getTargetContent());
+    }
+
+    public function testGetPreparedAssetWrong()
+    {
+        $this->setExpectedException(
+            Exception\NotFoundException::class,
+            'collection "notExistsAlias" not found'
+        );
+        $am = $this->getAssetsManager();
+        $asset = $am->getPreparedAsset('notExistsAlias', null, 'style1.css');
+    }
+
+    public function testGetPreparedAssetAggregate()
+    {
+        $am = $this->getAssetsManager();
+        $asset = $am->getPreparedAsset('aggregate.css', null, 'aggregate.css');
+        $this->assertEquals(".style_1 {}\n.style_2 {}\n", $asset->getTargetContent());
+    }
+
+    public function testSetInvalidCollectionName()
+    {
+        $this->setExpectedException(Exception\InvalidArgumentException::class, 'Current group should be not empty string');
+        (new AssetsManager(new ServiceManager))->setCollectionName('');
+    }
+
+    public function testSetNotExistsCollectionName()
+    {
+        $this->setExpectedException(Exception\InvalidArgumentException::class, 'Collection "NotExists" not exist');
+        (new AssetsManager(new ServiceManager))->setCollectionName('NotExists');
+    }
+
+    public function testCollection()
+    {
+        $assetsManager = new AssetsManager(new ServiceManager);
+
+        $this->assertEquals('default', $assetsManager->getCollectionName());
+        $this->assertInstanceOf(
+            AssetsCollection::class,
+            $assetsManager->getCollection()
+        );
+        $this->assertInstanceOf(
+            AssetsCollection::class,
+            $assetsManager->getCollection('default')
+        );
+
+        $assetsManager->setCollection('foo', []);
+        $foo = $assetsManager->getCollection('foo');
+        $this->assertInstanceOf(AssetsCollection::class, $foo);
+        $this->assertSame($foo,
+            $assetsManager->setCollectionName('foo')->getCollection()
+        );
+    }
+
+    public function testCache()
+    {
+        $path = '_files';
+        $publicFolder = $path . '/assets_cache';
+        $this->removeDirectory($path);
+        $this->createDirectory($publicFolder);
+
+        $assetsManager = $this->getAssetsManager(['assets_manager' => [
+            'cache_adapter' => [
+                'adapter' => Cache\DefaultAdapter::class,
+                'options' => [
+                    'cache_dir' => $publicFolder,
+                ],
+            ],
+        ]]);
+        $cachedFileName = $publicFolder . '/assets/ns-foo/style5.css';
+        $this->assertFileNotExists($cachedFileName);
+        $asset = $assetsManager->getPreparedAsset(null, 'foo', 'style5.css');
+        $this->assertEquals('.style_5 {}', $asset->getTargetContent());
+        $this->assertFileExists($cachedFileName);
+
+        $this->removeDirectory($path);
+    }
+
+    public function testCacheAlreadyCached()
+    {
+        $path = '_files';
+        $publicFolder = $path . '/assets_cache';
+        $this->removeDirectory($path);
+        $this->createDirectory($publicFolder . '/assets/ns-foo');
+
+        $assetsManager = $this->getAssetsManager(['assets_manager' => [
+            'cache_adapter' => [
+                'adapter' => Cache\DefaultAdapter::class,
+                'options' => [
+                    'cache_dir' => $publicFolder,
+                ],
+            ],
+        ]]);
+
+        $cachedFileName = $publicFolder . '/assets/ns-foo/style5.css';
+        file_put_contents($cachedFileName, '.style_5 {} cached');
+
+        $asset = $assetsManager->getPreparedAsset(null, 'foo', 'style5.css');
+
+        $this->assertInternalType('resource', $asset->getTargetContent());
+        $this->assertEquals('.style_5 {} cached', stream_get_contents($asset->getTargetContent()));
+        $this->assertFileExists($cachedFileName);
+
+        fclose($asset->getTargetContent());
+        $this->removeDirectory($path);
+    }
+
+    public function testGetFilteredContent()
+    {
+        $assetsManager = $this->getAssetsManager([
+            'assets_manager' => [
+                'collections' => ['default' => [
+                    'assets' => [
+                        'style1.css' => [
+                            'filters' => [
+                                [
+                                    'name' => TestAsset\WrapFilter::class,
+                                    'options' => ['template' => '#1 %s']
                                 ],
                             ],
                         ],
                     ],
+                    'filters' => [
+                        '\S*.css' => [
+                            [
+                                'name' => TestAsset\WrapFilter::class,
+                                'options' => ['template' => '#2 %s']
+                            ],
+                        ],
+                    ],
+                ]],
+                'filters' => new ArrayUtils\MergeReplaceKey([
+                    '*' => [
+                        [
+                            'name' => TestAsset\WrapFilter::class,
+                            'options' => ['template' => '#3 %s']
+                        ],
+                    ],
+                    '\S*.css' => [
+                        ['name' => TestAsset\WrapFilter::class],
+                    ]
+                ]),
+            ],
+            'filters' => [
+                'invokables' => [
+                    TestAsset\WrapFilter::class,
                 ],
             ],
         ]);
 
-        $foo = $this->assetsManager->get('foo.css');
-        $this->assertInstanceOf(Asset::class, $foo);
+        $asset = $assetsManager->getPreparedAsset(null, null, 'style1.css');
+        $this->assertEquals("=== #3 #2 #1 .style_1 {} ===", $asset->getTargetContent());
+    }
 
-        $severalAssets = $this->assetsManager->get('several_assets');
-        $this->assertInstanceOf(Alias::class, $severalAssets);
+    public function testGetFilters()
+    {
+        $assetsManager = $this->getAssetsManager([
+            'assets_manager' => [
+                'collections' => ['default' => [
+                    'filters' => [
+                        '\S*.css' => [
+                            [
+                                'name' => TestAsset\WrapFilter::class,
+                                'options' => ['template' => '#2 %s']
+                            ],
+                        ],
+                    ],
+                ]],
+                'filters' => new ArrayUtils\MergeReplaceKey([
+                    '*' => [
+                        [
+                            'name' => TestAsset\WrapFilter::class,
+                            'options' => ['template' => '#3 %s']
+                        ],
+                    ],
+                ]),
+            ],
+            'filters' => [
+                'invokables' => [
+                    TestAsset\WrapFilter::class,
+                ],
+            ],
+        ]);
+        $filters = $assetsManager->getFilters('foo.css');
+        $this->assertEquals([
+            [
+                'name' => TestAsset\WrapFilter::class,
+                'options' => ['template' => '#2 %s']
+            ],
+            [
+                'name' => TestAsset\WrapFilter::class,
+                'options' => ['template' => '#3 %s']
+            ],
+        ], $filters);
+        $this->assertTrue($assetsManager->hasFilters('foo.css'));
 
-        $asset = $severalAssets->get('bar.css');
-        $this->assertInstanceOf(Asset::class, $asset);
+        $filters = $assetsManager->getFilters('foo.less');
+        $this->assertEquals([
+            [
+                'name' => TestAsset\WrapFilter::class,
+                'options' => ['template' => '#3 %s']
+            ],
+        ], $filters);
+        $this->assertTrue($assetsManager->hasFilters('foo.less'));
+    }
 
-        $asset = $severalAssets->get('bat.js');
-        $this->assertInstanceOf(Asset::class, $asset);
+    protected function createDirectory($path)
+    {
+        if (!file_exists($path) && @mkdir($path, 0777, true) === false) {
+            throw new \Exception('can not create folder for caching asset');
+        }
+    }
+
+    protected function removeDirectory($path)
+    {
+        if (!file_exists($path)) {
+            return;
+        }
+        foreach (glob($path . '/*') as $file) {
+            is_dir($file) ? $this->removeDirectory($file) : unlink($file);
+        }
+        rmdir($path);
     }
 }

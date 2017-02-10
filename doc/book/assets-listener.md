@@ -34,5 +34,5 @@ echo $this->assets();
 
 Layout Output:
 ```html
-<link href="/assets-cache/prefix-ModuleTwo/foo.css" type="text/css">
+<link href="/assets/prefix-ModuleTwo/foo.css" type="text/css">
 ```

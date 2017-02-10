@@ -11,6 +11,7 @@ namespace ZendTest\View\Assets\Asset;
 
 use Zend\View\Assets\Asset\Asset;
 use Zend\View\Assets\AssetsManager;
+use Zend\ServiceManager\ServiceManager;
 
 /**
  * @group      Zend_View
@@ -24,63 +25,50 @@ class AssetTest extends \PHPUnit_Framework_TestCase
 
     public function setUp()
     {
-        $this->assetsManager = new AssetsManager();
+        $this->assetsManager = new AssetsManager(new ServiceManager);
     }
-
+    
     public function testConstructor()
     {
-        $asset = new Asset('foo.css', [
+        $asset = new Asset([
+            'source'     => 'foo.css',
             'attributes' => ['foo' => 'bar'],
             'filters'    => ['baz'],
         ]);
-        $this->assertEquals('foo.css', $asset->getName());
+        $this->assertEquals('foo.css', $asset->getSource());
+        $this->assertEquals(null,      $asset->getSourceNs());
+        $this->assertEquals('foo.css', $asset->getSourceName());
         $this->assertFalse($asset->isExternal());
-        $this->assertNull($asset->getPrefix());
         $this->assertEquals(['foo' => 'bar'], $asset->getAttributes());
         $this->assertEquals(['baz'], $asset->getFilters());
 
         $asset = new Asset('http://foo.css');
-        $this->assertEquals('http://foo.css', $asset->getName());
+        $this->assertEquals('http://foo.css', $asset->getSource());
+        $this->assertEquals(null,             $asset->getSourceNs());
+        $this->assertEquals('http://foo.css', $asset->getSourceName());
         $this->assertTrue($asset->isExternal());
-        $this->assertNull($asset->getPrefix());
+        $this->assertEquals([], $asset->getAttributes());
+        $this->assertEquals([], $asset->getFilters());
 
         $asset = new Asset('module::/foo.css');
-        $this->assertEquals('module::foo.css', $asset->getName());
-        $this->assertFalse($asset->isExternal());
-        $this->assertEquals('module', $asset->getPrefix());
         $this->assertEquals('module::foo.css', $asset->getSource());
+        $this->assertEquals('module',          $asset->getSourceNs());
+        $this->assertEquals('foo.css',         $asset->getSourceName());
+        $this->assertFalse($asset->isExternal());
     }
 
-    public function testSourceAndTarget()
+    public function testSetGetSource()
     {
-        $asset = new Asset('foo.css', [
+        $asset = new Asset([
             'source'    => 'foo.less',
         ]);
-        $this->assertEquals('foo.css', $asset->getName());
-        $this->assertEquals('', $asset->getPrefix());
         $this->assertEquals('foo.less', $asset->getSource());
-        $this->assertEquals('foo.css', $asset->getTarget());
+        $this->assertEquals('',         $asset->getSourceNs());
+        $this->assertEquals('foo.less', $asset->getSourceName());
 
-        $asset = new Asset('pre::foo.css', [
-            'source'    => 'pre::foo.less',
-        ]);
-        $this->assertEquals('pre::foo.css', $asset->getName());
-        $this->assertEquals('pre', $asset->getPrefix());
-        $this->assertEquals('pre::foo.less', $asset->getSource());
-        $this->assertEquals('foo.css', $asset->getTarget());
-
-        $asset = new Asset('foo.css', [
-            'source'    => 'pre::foo.less',
-        ]);
-        $this->assertEquals('foo.css', $asset->getName());
-        $this->assertEquals('', $asset->getPrefix());
-        $this->assertEquals('pre::foo.less', $asset->getSource());
-        $this->assertEquals('foo.css', $asset->getTarget());
-
-        $asset = new Asset('foo.css', 'pre::foo.less');
-        $this->assertEquals('foo.css', $asset->getName());
-        $this->assertEquals('', $asset->getPrefix());
-        $this->assertEquals('pre::foo.less', $asset->getSource());
-        $this->assertEquals('foo.css', $asset->getTarget());
+        $asset->setSource('pre::css/foo.css');
+        $this->assertEquals('pre::css/foo.css', $asset->getSource());
+        $this->assertEquals('pre',              $asset->getSourceNs());
+        $this->assertEquals('css/foo.css',      $asset->getSourceName());
     }
 }

@@ -71,16 +71,16 @@ Output:
 <?php
 // section in config file:
 'assets_manager' => [
-    'assets' => [
+    'collections' => [
         'default' => [
-            'external.css' => [
-                'source' => 'http://com.com/foo.css',
+            'external' => [
+                'http://com.com/foo.css' => [],
             ],
             'foo.css' => [],
             'several_assets' => [
                 'assets' => [
-                    'external.css',
-                    'bar.css',
+                    'external'
+                    'bar.css' => [],
                     'bat.js' => [
                         'attributes' => [
                             'charset' => 'UTF-8',
@@ -121,12 +121,12 @@ Output:
 <?php
 // section in config file:
 'assets_manager' => [
-    'assets' => [
+    'collections' => [
         'default' => [
-            'layout.css' => 'foo.css',
+            'layout.css' => ['source' => 'foo.css'],
         ],
         'my-theme' => [
-            'layout.css' => 'bar.css',
+            'layout.css' => ['source' => 'bar.css'],
         ],
     ],
 ];

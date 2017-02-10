@@ -9,8 +9,8 @@
 
 namespace ZendTest\View\Assets\Asset;
 
-use Zend\View\Assets\Asset;
-use Zend\View\Assets\AssetsManager;
+use Zend\View\Assets\Asset\AbstractAsset;
+use Zend\View\Assets\Exception;
 
 /**
  * @group      Zend_View
@@ -21,47 +21,112 @@ class AbstractAssetTest extends \PHPUnit_Framework_TestCase
     {
         $this->assertEquals(
             'foo/bar/baz.css',
-            Asset\AbstractAsset::normalizeName('\foo/bar\baz.css')
+            AbstractAsset::normalizeName('\foo/bar\baz.css')
         );
         $this->assertEquals(
             'http://foo/bar/baz.css',
-            Asset\AbstractAsset::normalizeName('http://foo\bar\baz.css')
+            AbstractAsset::normalizeName('http://foo\bar\baz.css')
         );
         $this->assertEquals(
-            'prefix::foo/bar/baz.css',
-            Asset\AbstractAsset::normalizeName('prefix::/foo\bar\baz.css')
+            'namespace::foo/bar/baz.css',
+            AbstractAsset::normalizeName('namespace::/foo\bar\baz.css')
         );
         $this->assertEquals(
-            'prefix::foo/bar/baz.css',
-            Asset\AbstractAsset::normalizeName(['prefix', '\foo\bar/baz.css'])
+            'namespace::foo/bar/baz.css',
+            AbstractAsset::normalizeName(['namespace', '\foo\bar/baz.css'])
         );
         $this->assertEquals(
             'foo/bar/baz.css',
-            Asset\AbstractAsset::normalizeName([null, '\foo\bar/baz.css'])
+            AbstractAsset::normalizeName([null, '\foo\bar/baz.css'])
         );
     }
 
-    public function testFactory()
+    public function testSetOptions()
     {
-        $assetsManager = new AssetsManager();
-        $asset = Asset\AbstractAsset::factory('foo', 'bar', $assetsManager);
-        $this->assertInstanceOf(Asset\Asset::class, $asset);
-        $this->assertEquals('bar', $asset->getSource());
+        $asset = new AbstractAsset();
+        $asset->setOptions([
+            'attributes' => ['foo' => 'bar'],
+            'baz' => 'bat',
+        ]);
+        $this->assertEquals(['baz' => 'bat'], $asset->getOptions());
+        $this->assertEquals(['foo' => 'bar'], $asset->getAttributes());
+    }
 
-        $asset = Asset\AbstractAsset::factory('foo', ['source' => 'bar'], $assetsManager);
-        $this->assertInstanceOf(Asset\Asset::class, $asset);
-        $this->assertEquals('bar', $asset->getSource());
+    public function testSetTraversableOptions()
+    {
+        $asset = new AbstractAsset();
+        $asset->setOptions(new \ArrayObject([
+            'attributes' => ['foo' => 'bar'],
+            'baz' => 'bat',
+        ]));
+        $this->assertEquals(['baz' => 'bat'], $asset->getOptions());
+        $this->assertEquals(['foo' => 'bar'], $asset->getAttributes());
+    }
 
-        $asset = Asset\AbstractAsset::factory('foo', [], $assetsManager);
-        $this->assertInstanceOf(Asset\Asset::class, $asset);
-        $this->assertEquals('foo', $asset->getName());
-
-        $alias = Asset\AbstractAsset::factory('foo', ['assets' => 'bar'], $assetsManager);
-        $this->assertInstanceOf(Asset\Alias::class, $alias);
-        $this->assertEquals('foo', $alias->getName());
-        $this->assertEquals(
-            new Asset\Asset('bar'),
-            $alias->get('bar')
+    public function testSetWrongOptions()
+    {
+        $this->setExpectedException(
+            Exception\InvalidArgumentException::class,
+            '"Zend\View\Assets\Asset\AbstractAsset::setOptions" expects an array or Traversable; received "stdClass"'
         );
+        $asset = new AbstractAsset();
+        $asset->setOptions(new \stdClass());
+    }
+
+    public function testSetAttributes()
+    {
+        $asset = new AbstractAsset();
+        $asset->setAttributes(['foo' => 'bar']);
+        $asset->setAttribute('baz', 'bat');
+        $this->assertEquals([
+            'foo' => 'bar',
+            'baz' => 'bat',
+        ], $asset->getAttributes());
+
+        $this->assertEquals('bar', $asset->getAttributes('foo'));
+        $this->assertEquals('bat', $asset->getAttributes('baz'));
+    }
+
+    public function testSetTraversableAttributes()
+    {
+        $asset = new AbstractAsset();
+        $asset->setAttributes(new \ArrayObject(['foo' => 'bar']));
+        $this->assertEquals(['foo' => 'bar'], $asset->getAttributes());
+    }
+
+    public function testSetWrongAttributes()
+    {
+        $this->setExpectedException(
+            Exception\InvalidArgumentException::class,
+            '"Zend\View\Assets\Asset\AbstractAsset::setAttributes" expects an array or Traversable; received "stdClass"'
+        );
+        $asset = new AbstractAsset();
+        $asset->setAttributes(new \stdClass());
+    }
+
+    public function testSetFilters()
+    {
+        $asset = new AbstractAsset();
+        $this->assertFalse($asset->hasFilters());
+        $asset->setFilters(['foo', 'bar']);
+        $this->assertEquals(['foo', 'bar',], $asset->getFilters());
+        $this->assertTrue($asset->hasFilters());
+    }
+
+    public function testSetTraversableFilters()
+    {
+        $asset = new AbstractAsset();
+        $asset->setFilters(new \ArrayObject(['foo', 'bar']));
+        $this->assertEquals(['foo', 'bar'], $asset->getFilters());
+    }
+
+    public function testSetWrongFilters()
+    {
+        $this->setExpectedException(
+            Exception\InvalidArgumentException::class,
+            '"Zend\View\Assets\Asset\AbstractAsset::setFilters" expects an array or Traversable; received "stdClass"'
+        );
+        $asset = new AbstractAsset();
+        $asset->setFilters(new \stdClass());
     }
 }

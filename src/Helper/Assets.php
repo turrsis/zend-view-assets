@@ -12,7 +12,7 @@ namespace Zend\View\Assets\Helper;
 use Zend\View\Assets\AssetsManager;
 use Zend\Stdlib\ArrayUtils;
 use Zend\Stdlib\PriorityList;
-use Zend\View\Exception;
+use Zend\View\Assets\Exception;
 use Zend\View\Assets\Asset;
 use Zend\View\Helper\AbstractHelper;
 
@@ -22,15 +22,9 @@ use Zend\View\Helper\AbstractHelper;
  */
 class Assets extends AbstractHelper
 {
-    protected $basePath = '';
-
     protected $defaultGroup = 'default';
 
     protected $groups = [];
-
-    protected $routeName;
-
-    protected $urlHelper;
 
     protected $rendered = [];
 
@@ -96,7 +90,7 @@ class Assets extends AbstractHelper
             $priority = $options;
             $options = [];
         }
-        $asset = Asset\AbstractAsset::normalizeName($asset);
+        $asset = Asset\Asset::normalizeName($asset);
         if ($list->get($asset) === null) {
             $list->insert($asset, $options, $priority);
         }
@@ -106,70 +100,74 @@ class Assets extends AbstractHelper
     protected function renderGroup($group)
     {
         $group = strtolower($group);
-        if (isset($this->rendered[$group])) {
-            return '';
-        }
-
-        if (!isset($this->groups[$group])) {
+        if (isset($this->rendered[$group]) || !isset($this->groups[$group])) {
             return '';
         }
 
         $result = '';
-        foreach ($this->groups[$group] as $asset => $attributes) {
-            if (!$this->assetsManager->has($asset)) {
-                $asset = new Asset\Asset($asset);
-            } else {
-                $asset = $this->assetsManager->get($asset);
+        $collection = $this->assetsManager->getCollection();
+        foreach ($this->groups[$group] as $assetName => $assetAttributes) {
+            $asset = $collection->getAsset($assetName);
+            if (!$asset) {
+                $collection->setAsset($assetName, $assetAttributes);
+                $asset = $collection->getAsset($assetName);
             }
-            $result .= $this->renderAsset($asset, $attributes);
+            $this->assetsManager->initAsset($asset);
+            if ($asset instanceof Asset\AssetCollection) {
+                $result .= $this->renderCollection($asset, $assetAttributes);
+            } else {
+                $result .= $this->renderAsset($asset, $assetAttributes);
+            }
         }
         $this->rendered[$group] = true;
         return trim($result, $this->EOL) . $this->EOL;
     }
 
-    protected function renderAsset(Asset\AbstractAsset $asset, $attributes = [])
+    protected function renderCollection(Asset\AssetCollection $collection, $attributes = [])
     {
-        if ($asset instanceof Asset\Asset) {
-            return $this->renderLink(null, $asset, $attributes) . $this->EOL;
-        }
-        if (!$asset instanceof Asset\Alias) {
-            throw new Exception\InvalidArgumentException(sprintf(
-                '%s: expects "$asset" parameter an %s or %s, received "%s"',
-                __METHOD__,
-                Asset\Asset::class,
-                Asset\Alias::class,
-                (is_object($asset) ? get_class($asset) : gettype($asset))
-            ));
+        if ($collection instanceof Asset\AggregateCollection) {
+            return $this->renderLink(
+                $collection->getTargetUri(),
+                $attributes,
+                $collection->getMimeType()
+            ) . $this->EOL;
         }
 
-        $return = '';
-        $attributes = ArrayUtils::merge($asset->getAttributes(), $attributes);
-        foreach ($asset as $assetItem) {
-            if ($assetItem instanceof Asset\Alias) {
-                $return .= $this->renderAsset($assetItem, $attributes) . $this->EOL;
+        $result = '';
+        foreach ($collection as $asset) {
+            if (!$asset) {
+                continue;
+            }
+            $this->assetsManager->initAsset($asset);
+            if ($asset instanceof Asset\AssetCollection) {
+                $result .= $this->renderCollection($asset, $attributes);
             } else {
-                $return .= $this->renderLink($asset->getName(), $assetItem, $attributes) . $this->EOL;
+                $result .= $this->renderAsset($asset, $attributes);
             }
         }
-        return $return;
+        return trim($result, $this->EOL) . $this->EOL;
     }
 
-    protected function renderLink($alias, Asset\Asset $asset, $attributes = [])
+    protected function renderAsset(Asset\Asset $asset, $attributes = [])
     {
-        $href = $this->assemble($alias, $asset);
-
+        $href = $asset->getTargetUri();
         if (isset($this->rendered[$href])) {
             return '';
         }
         $this->rendered[$href] = true;
 
-        $mimeType = $asset->getAttributes('type') ?: $this->assetsManager->getMimeResolver()->resolve($asset->getTarget());
+        $mimeType = $asset->getMimeType();
 
         $attributes = ArrayUtils::merge(
             ArrayUtils::merge($this->getMimeAttributes($mimeType), $asset->getAttributes()),
             $attributes
         );
 
+        return $this->renderLink($href, $attributes, $mimeType) . $this->EOL;
+    }
+
+    protected function renderLink($href, $attributes, $mimeType)
+    {
         $renderer = $this->getMimeRenderer($mimeType);
 
         if ($mimeType == 'application/javascript') {
@@ -177,7 +175,7 @@ class Assets extends AbstractHelper
             return $renderer->itemToString((object)[
                 'type'       => $mimeType,
                 'attributes' => $attributes,
-            ], null, null, null);
+            ], null, null, null) . $this->EOL;
         }
 
         $attributes['href'] = $href;
@@ -189,34 +187,6 @@ class Assets extends AbstractHelper
         }
 
         return $renderer->itemToString((object)$attributes, '');
-    }
-
-    protected function assemble($alias, Asset\Asset $asset)
-    {
-        if ($asset->isExternal()) {
-            return $asset->getTarget();
-        }
-        if (!$alias && !$asset->getPrefix()) {
-            return $this->basePath . '/' . $asset->getTarget();
-        }
-
-        if (!$this->routeName) {
-            throw new Exception\InvalidArgumentException('Using modules assets require the valid "routeName"');
-        }
-
-        if (!$this->urlHelper) {
-            $this->urlHelper = $this->getView()->plugin('url');
-        }
-
-        $href = $this->urlHelper->__invoke($this->routeName, [
-            'alias'  => $alias,
-            'prefix' => $asset->getPrefix(),
-            'asset'  => $asset->getTarget(),
-        ], [
-            'reuse_query'      => false,
-            'only_return_path' => true,
-        ]);
-        return '/' . ltrim($href, '/');
     }
 
     public function getMimeRenderer($contentType)
@@ -234,28 +204,6 @@ class Assets extends AbstractHelper
     {
         $this->mimeRenderers[$contentType] = $renderer;
         return $this;
-    }
-
-    public function setRouteName($routeName)
-    {
-        $this->routeName = $routeName;
-        return $this;
-    }
-
-    public function getRouteName()
-    {
-        return $this->routeName;
-    }
-
-    public function setBasePath($basePath)
-    {
-        $this->basePath = $basePath;
-        return $this;
-    }
-
-    public function getBasePath()
-    {
-        return $this->basePath;
     }
 
     public function getMimeAttributes($mime = null)

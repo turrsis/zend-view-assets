@@ -9,38 +9,32 @@
 
 namespace Zend\View\Assets\Asset;
 
-class Asset extends AbstractAsset
+use Zend\View\Assets\Exception;
+use Zend\Stdlib\ErrorHandler;
+
+class Asset extends AbstractAsset implements TargetInterface
 {
-    protected $prefix;
+    use TargetTrait;
+
     protected $source;
+
+    protected $sourceNs;
+
+    protected $sourceName;
+
+    protected $sourceUri;
+
+    protected $sourceContent;
+
     protected $isExternal;
 
-    public function __construct($name, $options = [])
+    public function __construct($options = [])
     {
         if (is_string($options)) {
-            $options = ['source' => $options];
+            $this->setSource($options);
+        } else {
+            $this->setOptions($options);
         }
-        parent::__construct($name, $options);
-
-        if (false !== ($posName = stripos($this->name, self::PREFIX_DELIMITER))) {
-            $this->prefix = substr($this->name, 0, $posName);
-        }
-
-        $this->source = isset($options['source'])
-                ? self::normalizeName($options['source'])
-                : $this->name;
-
-        $this->target = $this->target ?: $this->name;
-        if (false !== ($posTarget = stripos($this->target, self::PREFIX_DELIMITER))) {
-            $this->target = substr($this->target, $posTarget + strlen(self::PREFIX_DELIMITER));
-        }
-
-        $this->isExternal = (stripos($this->target, 'http') === 0);
-    }
-
-    public function getPrefix()
-    {
-        return $this->prefix;
     }
 
     public function getSource()
@@ -48,8 +42,88 @@ class Asset extends AbstractAsset
         return $this->source;
     }
 
+    public function setSource($source)
+    {
+        $this->sourceNs = null;
+        $this->sourceName = null;
+        $this->isExternal = null;
+        $this->source = self::normalizeName($source);
+        
+        $source = explode(self::NS_DELIMITER, $this->source, 2);
+        if (count($source) == 1) {
+            $this->sourceNs = null;
+            $this->sourceName = $source[0];
+        } else {
+            $this->sourceNs = $source[0];
+            $this->sourceName = $source[1];
+        }
+        return $this;
+    }
+
+    public function getSourceNs()
+    {
+        return $this->sourceNs;
+    }
+
+    public function getSourceName()
+    {
+        return $this->sourceName;
+    }
+
+    public function getSourceUri()
+    {
+        return $this->sourceUri;
+    }
+
+    public function setSourceUri($sourceUri)
+    {
+        $this->sourceUri = $sourceUri;
+        return $this;
+    }
+
+    public function getSourceContent()
+    {
+        if ($this->sourceContent === null) {
+            ErrorHandler::start();
+            $this->sourceContent = file_get_contents($this->sourceUri);
+            if ($err = ErrorHandler::stop()) {
+                throw new Exception\RuntimeException(
+                    "Error get source content: '$this->sourceUri'", 0, $err
+                );
+            }
+        }
+        return $this->sourceContent;
+    }
+
+    public function setSourceContent($content)
+    {
+        $this->sourceContent = $content;
+        return $this;
+    }
+
+    public function getTargetContent($forceLoad = false)
+    {
+        if ($this->targetContent === null && $forceLoad) {
+            $this->targetContent = $this->getSourceContent();
+        }
+        return $this->targetContent;
+    }
+
     public function isExternal()
     {
+        if ($this->isExternal === null) {
+            $this->isExternal = (stripos($this->getSource(), 'http') === 0);
+        }
         return $this->isExternal;
+    }
+
+    /**
+     * @return string
+     */
+    public function getCollectionName()
+    {
+        return $this->collection instanceof AssetCollection
+                ? $this->collection->getName()
+                : null;
     }
 }

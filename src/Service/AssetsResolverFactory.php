@@ -7,14 +7,14 @@
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
-namespace Zend\View\Assets\Resolver\Service;
+namespace Zend\View\Assets\Service;
 
 use Zend\ServiceManager\FactoryInterface;
 use Interop\Container\ContainerInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 use Zend\View\Resolver as ViewResolver;
 use Zend\Stdlib\ArrayUtils;
-use Zend\View\Exception\DomainException;
+use Zend\View\Assets\Exception;
 
 class AssetsResolverFactory implements FactoryInterface
 {
@@ -23,13 +23,15 @@ class AssetsResolverFactory implements FactoryInterface
         $config = $container->get('config');
 
         if (!isset($config['assets_manager'])) {
-            throw new DomainException(sprintf(
+            throw new Exception\InvalidArgumentException(sprintf(
                 '%s: expects "assets_manager" key in Config',
                 __METHOD__
             ));
         }
 
-        $publicFolder = $container->get('AssetsManager')->getPublicFolder();
+        $publicFolder = isset($config['assets_manager']['public_folder'])
+                ? $config['assets_manager']['public_folder']
+                : './public';
 
         $resolverConfig = isset($config['assets_manager']['template_resolver'])
                 ? $config['assets_manager']['template_resolver']
@@ -45,6 +47,8 @@ class AssetsResolverFactory implements FactoryInterface
                 $publicFolder,
             ];
         }
+
+        $resolverConfig['prefix_resolver']['public::'] = $publicFolder;
 
         $resolver = new ViewResolver\AggregateResolver();
         foreach ($resolverConfig as $name => $options) {

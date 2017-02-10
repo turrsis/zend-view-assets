@@ -12,7 +12,6 @@ namespace Zend\View\Assets\Helper\Service;
 use Interop\Container\ContainerInterface;
 use Zend\ServiceManager\FactoryInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
-use Zend\View\Assets\Service\AssetsManagerFactory;
 use Zend\View\Assets\Helper\Assets;
 
 class AssetsFactory implements FactoryInterface
@@ -22,24 +21,11 @@ class AssetsFactory implements FactoryInterface
         $config = $container->get('config');
         $config = isset($config['assets_manager']) ? $config['assets_manager'] : [];
 
-        $instance = new Assets();
-        if ($container->has('AssetsManager')) {
-            $assetsManager = $container->get('AssetsManager');
-        } else {
-            $factory = new AssetsManagerFactory;
-            $assetsManager = $factory($container, 'AssetsManager');
-        }
-        $instance->setAssetsManager($assetsManager);
-        $instance->setRouteName(isset($config['router_name']) ? $config['router_name'] : null);
-        $instance->setMimeAttributes(isset($config['mime_attributes']) ? $config['mime_attributes'] : []);
+        $assets = new Assets();
+        $assets->setAssetsManager($container->get('AssetsManager'));
+        $assets->setMimeAttributes(isset($config['mime_attributes']) ? $config['mime_attributes'] : []);
 
-        if ($container->has('Request')) {
-            $request = $container->get('Request');
-            if (is_callable([$request, 'getBasePath'])) {
-                $instance->setBasePath($request->getBasePath());
-            }
-        }
-        return $instance;
+        return $assets;
     }
 
     /**

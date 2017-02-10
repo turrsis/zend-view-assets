@@ -7,23 +7,28 @@
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
-namespace Zend\View\Assets\Resolver\Service;
+namespace Zend\View\Assets\Service;
 
 use Zend\ServiceManager\FactoryInterface;
 use Interop\Container\ContainerInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
-use Zend\View\Assets\MimeResolver;
+use Zend\View\Assets\AssetsRouter;
 
-class MimeResolverFactory implements FactoryInterface
+class AssetsRouterFactory implements FactoryInterface
 {
+    protected $assetsClass = AssetsRouter::class;
+
     public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
+        $router = new $this->assetsClass();
+        $router->setBasePath($container->get('Request')->getBasePath());
+        $router->setAssetsManager($container->get('AssetsManager'));
         $config = $container->get('config');
-        return new MimeResolver(
-            isset($config['assets_manager']['mime_types'])
-                ? $config['assets_manager']['mime_types']
-                : []
-        );
+        if (isset($config['assets_manager']['router_prefix'])) {
+            $router->setPrefix($config['assets_manager']['router_prefix']);
+        }
+
+        return $router;
     }
 
     public function createService(ServiceLocatorInterface $serviceLocator, $rName = null, $cName = null)

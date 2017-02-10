@@ -7,13 +7,9 @@
 
 namespace Zend\View\Assets;
 
-use Zend\ServiceManager\Factory\InvokableFactory;
-
 class ConfigProvider
 {
     /**
-     * Return general-purpose zend-i18n configuration.
-     *
      * @return array
      */
     public function __invoke()
@@ -32,14 +28,11 @@ class ConfigProvider
     public function getDependencyConfig()
     {
         return [
-            'aliases' => [
-                'AssetsListener' => 'Zend\View\Assets\AssetsListener',
-            ],
             'factories'  => [
-                'AssetsManager'                   => 'Zend\View\Assets\Service\AssetsManagerFactory',
-                'MimeResolver'                    => 'Zend\View\Assets\Resolver\Service\MimeResolverFactory',
-                'ViewAssetsResolver'              => 'Zend\View\Assets\Resolver\Service\AssetsResolverFactory',
-                'Zend\View\Assets\AssetsListener' => 'Zend\View\Assets\Service\AssetsListenerFactory',
+                'AssetsRouter'        => Service\AssetsRouterFactory::class,
+                'AssetsManager'       => Service\AssetsManagerFactory::class,
+                'MimeResolver'        => Service\MimeResolverFactory::class,
+                'ViewAssetsResolver'  => Service\AssetsResolverFactory::class,
             ],
         ];
     }
@@ -53,8 +46,6 @@ class ConfigProvider
      */
     public function getViewHelperConfig()
     {
-        //F:\aDev\SVN\turrsis_cms\app\vendor\zendframework\zend-view-assets\src\Helper\Service
-        //F:\aDev\SVN\turrsis_cms\app\vendor\zendframework\zend-view-assets\src\Hepler\Service
         return [
             'aliases' => [
                 'Assets'              => Helper\Assets::class,
@@ -65,6 +56,51 @@ class ConfigProvider
 
                 // v2 canonical FQCNs
                 'zendviewhelperassets'            => Helper\Service\AssetsFactory::class,
+            ],
+        ];
+    }
+
+    /**
+     * @return array
+     */
+    public function getAssetsManagerConfig()
+    {
+        return [
+            'router_prefix' => 'assets',
+            'public_folder' => './public',
+            'cache_adapter' => [
+                'adapter' => Cache\DefaultAdapter::class,
+                'options' => [
+                    'cache_dir' => './public',
+                ],
+            ],
+            'filters' => [
+                '\S*::\S*.css' => [ // fix url paths
+                    ['name' => 'CssImports'],
+                ],
+                '\S*.less' => [
+                    ['name' => 'LessPhpFilter'],
+                    ['name' => 'CssImports'],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array
+     */
+    public function getFiltersConfig()
+    {
+        return [
+            'aliases' => [
+                'CssImports' => Filter\CssImports::class,
+                'LessPhpFilter' => Filter\LessPhp::class,
+            ],
+            'factories' => [
+                Filter\CssImports::class => Filter\Service\CssImportsFactory::class,
+            ],
+            'invokables' => [
+                Filter\LessPhp::class,
             ],
         ];
     }

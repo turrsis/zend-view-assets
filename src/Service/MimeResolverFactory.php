@@ -12,17 +12,17 @@ namespace Zend\View\Assets\Service;
 use Zend\ServiceManager\FactoryInterface;
 use Interop\Container\ContainerInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
-use Zend\View\Assets\AssetsManager;
+use Zend\View\Assets\MimeResolver;
 
-class AssetsManagerFactory implements FactoryInterface
+class MimeResolverFactory implements FactoryInterface
 {
     public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
         $config = $container->get('config');
-
-        return new AssetsManager(
-            $container,
-            isset($config['assets_manager']) ? $config['assets_manager'] : []
+        return new MimeResolver(
+            isset($config['assets_manager']['mime_types'])
+                ? $config['assets_manager']['mime_types']
+                : []
         );
     }
 
