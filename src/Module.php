@@ -27,16 +27,11 @@ class Module
     public function getConfig()
     {
         $provider = new ConfigProvider();
-        $mvcProvider = new Mvc\ConfigProvider();
         return [
-            'service_manager' => ArrayUtils::merge(
-                $provider->getDependencyConfig(),
-                $mvcProvider->getDependencyConfig()
-            ),
+            'service_manager' => $provider->getDependencyConfig(),
             'view_helpers'    => $provider->getViewHelperConfig(),
             'assets_manager'  => $provider->getAssetsManagerConfig(),
             'filters'         => $provider->getFiltersConfig(),
-            'listeners'       => $mvcProvider->getListenersConfig(),
         ];
     }
 }
